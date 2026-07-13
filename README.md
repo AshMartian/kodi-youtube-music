@@ -11,7 +11,7 @@
 
 YouTube Music for Kodi is an unofficial Kodi add-on that lets you browse and play your YouTube Music Premium library directly inside Kodi. It is also known as a YouTube Music Kodi add-on, YT Music Kodi plugin, or `plugin.audio.ytmusic`.
 
-[![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate/?business=ypoulis%40gmail.com&currency_code=EUR)
+[![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://paypal.me/ypoulis)
 
 ---
 
@@ -141,7 +141,7 @@ See [ROADMAP.md](ROADMAP.md).
 
 If you find this add-on useful, you can support development with a one-time donation:
 
-[![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/donate/?business=ypoulis%40gmail.com&currency_code=EUR)
+[![Donate with PayPal](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://paypal.me/ypoulis)
 
 ## Disclaimer
 
