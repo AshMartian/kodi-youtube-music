@@ -11,6 +11,7 @@ import xbmcvfs
 
 ADDON = xbmcaddon.Addon()
 PROFILE = xbmcvfs.translatePath(ADDON.getAddonInfo('profile'))
+COOKIE_FILE = os.path.join(PROFILE, 'cookies.txt')
 
 # Resolution method: 'ytdlp_cli' (direct binary) or 'python' (subprocess)
 _resolve_method = None
@@ -397,10 +398,17 @@ def get_stream_url(video_id, _skip_prefetch=False):
 
 def _resolve_via_cli(ytdlp_path, url):
     """Resolve stream by calling yt-dlp binary directly."""
+    command = [ytdlp_path, '-f', 'bestaudio', '-j', '--no-playlist']
+    if os.path.isfile(COOKIE_FILE):
+        command.extend(['--cookies', COOKIE_FILE])
+    command.append(url)
     try:
         result = subprocess.run(
-            [ytdlp_path, '-f', 'bestaudio', '-j', '--no-playlist', url],
-            capture_output=True, text=True, timeout=20,
+            command,
+            # Kodi can be launched under the C/ASCII locale. yt-dlp emits
+            # UTF-8 JSON metadata (titles, artists), so never inherit that
+            # locale when decoding the child process output.
+            capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=20,
             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
         )
     except subprocess.TimeoutExpired:
@@ -434,9 +442,10 @@ def _resolve_via_cli(ytdlp_path, url):
 
 def _resolve_via_python(python_path, url):
     """Resolve stream by calling yt-dlp as a Python module."""
+    cookie_opt = ', "cookiefile": {!r}'.format(COOKIE_FILE) if os.path.isfile(COOKIE_FILE) else ''
     script = (
         'import yt_dlp, json, sys; '
-        'ydl_opts = {"format": "bestaudio", "quiet": True, "no_warnings": True, "noplaylist": True}; '
+        'ydl_opts = {"format": "bestaudio", "quiet": True, "no_warnings": True, "noplaylist": True' + cookie_opt + '}; '
         'ydl = yt_dlp.YoutubeDL(ydl_opts); '
         'info = ydl.extract_info(sys.argv[1], download=False); '
         'print(json.dumps({"url": info.get("url",""), "title": info.get("title",""), '
@@ -448,7 +457,7 @@ def _resolve_via_python(python_path, url):
     try:
         result = subprocess.run(
             [python_path, '-c', script, url],
-            capture_output=True, text=True, timeout=20,
+            capture_output=True, text=True, encoding='utf-8', errors='replace', timeout=20,
             creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),
         )
     except subprocess.TimeoutExpired:
