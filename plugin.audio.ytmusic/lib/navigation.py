@@ -484,8 +484,8 @@ class Router:
         )
         like_status = song.get('likeStatus', 'INDIFFERENT')
         rating_actions = {
-            'LIKE': [('Unlike Song', 'INDIFFERENT'), ('Dislike Song', 'DISLIKE')],
-            'DISLIKE': [('Like Song', 'LIKE'), ('Undo Dislike', 'INDIFFERENT')],
+            'LIKE': [('Unlike Song', 'INDIFFERENT')],
+            'DISLIKE': [('Undo Dislike', 'INDIFFERENT')],
             'INDIFFERENT': [('Like Song', 'LIKE'), ('Dislike Song', 'DISLIKE')],
         }.get(like_status, [('Like Song', 'LIKE'), ('Dislike Song', 'DISLIKE')])
         rating_menu_items = []
