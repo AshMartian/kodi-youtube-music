@@ -10,6 +10,7 @@ import os
 import time
 import hashlib
 import http.cookiejar
+import tempfile
 import xbmc
 import xbmcgui
 import xbmcaddon
@@ -27,6 +28,28 @@ def log(msg):
     xbmc.log('[YTMusic] auth: {}'.format(msg), xbmc.LOGINFO)
 
 
+def _load_mozilla_cookie_jar(path):
+    """Load a Netscape cookie file while normalizing non-ASCII comments only."""
+    os.makedirs(PROFILE, exist_ok=True)
+    fd, normalized_path = tempfile.mkstemp(prefix='ytmusic-cookies-', dir=PROFILE)
+    try:
+        with open(path, 'rb') as source, os.fdopen(fd, 'wb') as normalized:
+            for line in source:
+                # MozillaCookieJar understands #HttpOnly_ as a cookie record.
+                # Other # lines are comments, so safely make their text ASCII.
+                if line.startswith(b'#') and not line.startswith(b'#HttpOnly_'):
+                    line = line.decode('utf-8', errors='replace').encode('ascii', errors='replace')
+                normalized.write(line)
+        cj = http.cookiejar.MozillaCookieJar(normalized_path)
+        cj.load(ignore_discard=True, ignore_expires=True)
+        return cj
+    finally:
+        try:
+            os.remove(normalized_path)
+        except OSError:
+            pass
+
+
 def _load_cookies():
     """Load cookies from file into a simple dict."""
     global _cookie_dict
@@ -35,8 +58,7 @@ def _load_cookies():
 
     _cookie_dict = {}
     try:
-        cj = http.cookiejar.MozillaCookieJar(COOKIE_FILE)
-        cj.load(ignore_discard=True, ignore_expires=True)
+        cj = _load_mozilla_cookie_jar(COOKIE_FILE)
         for c in cj:
             _cookie_dict[c.name] = c.value
         log('Loaded {} cookies'.format(len(_cookie_dict)))
@@ -208,11 +230,13 @@ def run_cookie_setup():
     dialog.ok(
         'YTMusic - Cookie Setup',
         'To sign in, you need to export cookies from your browser.\n\n'
-        '1. Install a browser extension:\n'
-        '   Chrome: "Get cookies.txt LOCALLY"\n'
-        '   Firefox: "cookies.txt"\n\n'
-        '2. Go to music.youtube.com (make sure you are signed in)\n\n'
-        '3. Click the extension and export cookies'
+        '1. Sign in at music.youtube.com.\n'
+        '2. Install a cookie exporter:\n'
+        '   Chromium: "Get cookies.txt LOCALLY"\n'
+        '   Firefox: "cookies.txt"\n'
+        '3. Export a Netscape cookies.txt file.\n'
+        '   Do not export JSON.\n\n'
+        'Select that .txt file in the next dialog.'
     )
 
     # Ask user to browse to the cookies.txt file
@@ -232,8 +256,7 @@ def run_cookie_setup():
 
     # Validate and copy the cookie file
     try:
-        cj = http.cookiejar.MozillaCookieJar(cookie_path)
-        cj.load(ignore_discard=True, ignore_expires=True)
+        cj = _load_mozilla_cookie_jar(cookie_path)
 
         has_sapisid = False
         for c in cj:
