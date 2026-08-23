@@ -1,5 +1,6 @@
 """Kodi navigation / menu building for YTMusic."""
 
+import json
 import os
 import sys
 import time
@@ -361,6 +362,12 @@ class Router:
             log(f'Superseded by newer request, exiting silently for {video_id}')
             sys.exit(0)
 
+        rating = params.get('rating', '')
+        window = xbmcgui.Window(10000)
+        window.setProperty('YTMusic.CurrentVideoId', video_id)
+        window.setProperty('YTMusic.CurrentRating',
+                           rating if rating in ('LIKE', 'DISLIKE', 'INDIFFERENT') else '')
+
         li = xbmcgui.ListItem(title or info.get('title', 'Unknown'))
         li.setInfo('music', {
             'title': title or info.get('title', ''),
@@ -390,7 +397,8 @@ class Router:
                 tartist = self._artist_name(track)
                 tthumb = api.get_thumbnails(track)
                 url = self.build_url(action='play', video_id=tid,
-                                     title=tname, artist=tartist, thumb=tthumb)
+                                     title=tname, artist=tartist, thumb=tthumb,
+                                     rating=track.get('likeStatus', ''))
                 li = xbmcgui.ListItem(tname)
                 li.setInfo('music', {'title': tname, 'artist': tartist})
                 if tthumb:
@@ -414,10 +422,26 @@ class Router:
             raise RuntimeError('Invalid song rating request.')
 
         api.rate_song(video_id, rating)
+        current = self._current_ytmusic_track()
+        if current and current.get('video_id') == video_id:
+            window = xbmcgui.Window(10000)
+            window.setProperty('YTMusic.CurrentVideoId', video_id)
+            window.setProperty('YTMusic.CurrentRating', rating)
         xbmcgui.Dialog().notification('YTMusic', message,
                                       xbmcgui.NOTIFICATION_INFO, 3000)
         # Refetch the item so its context menu reflects the server's rating.
         xbmc.executebuiltin('Container.Refresh')
+
+    def action_rate_current_song(self, params):
+        """Rate the currently playing YTMusic track for skin controls."""
+        current = self._current_ytmusic_track()
+        if not current:
+            xbmcgui.Dialog().notification(
+                'YTMusic', 'No YouTube Music track is playing.',
+                xbmcgui.NOTIFICATION_ERROR, 3000)
+            return
+        current['rating'] = params.get('rating', '')
+        self.action_rate_song(current)
 
     # ── Helpers ──
 
@@ -456,6 +480,7 @@ class Router:
             title=title,
             artist=artist,
             thumb=thumb,
+            rating=song.get('likeStatus', ''),
         )
 
         li = xbmcgui.ListItem(label)
@@ -476,6 +501,7 @@ class Router:
             title=title,
             artist=artist,
             thumb=thumb,
+            rating=song.get('likeStatus', ''),
         )
         lyrics_url = self.build_url(
             action='show_lyrics',
@@ -536,6 +562,31 @@ class Router:
                 self._add_dir(title, action='album', browse_id=browse_id, thumb=thumb)
             else:
                 self._add_dir(title, action='noop', thumb=thumb)
+
+    def _current_ytmusic_track(self):
+        """Return current player metadata when it belongs to this add-on."""
+        request = json.dumps({
+            'jsonrpc': '2.0',
+            'method': 'Player.GetItem',
+            'params': {'playerid': 0, 'properties': ['file', 'title']},
+            'id': 1,
+        })
+        try:
+            response = json.loads(xbmc.executeJSONRPC(request))
+            item = response.get('result', {}).get('item', {})
+            file_url = item.get('file', '')
+            if not file_url.startswith('plugin://plugin.audio.ytmusic/'):
+                return None
+            query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(file_url).query))
+            video_id = query.get('video_id', '')
+            if not video_id:
+                return None
+            return {
+                'video_id': video_id,
+                'title': item.get('title') or query.get('title', 'this song'),
+            }
+        except (RuntimeError, ValueError, TypeError):
+            return None
 
     def _artist_name(self, item):
         artists = item.get('artists')
