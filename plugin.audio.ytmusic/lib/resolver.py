@@ -12,6 +12,7 @@ import xbmcvfs
 ADDON = xbmcaddon.Addon()
 PROFILE = xbmcvfs.translatePath(ADDON.getAddonInfo('profile'))
 COOKIE_FILE = os.path.join(PROFILE, 'cookies.txt')
+DENO_PATH = os.path.join(PROFILE, 'bin', 'deno')
 
 # Resolution method: 'ytdlp_cli' (direct binary) or 'python' (subprocess)
 _resolve_method = None
@@ -401,6 +402,8 @@ def _resolve_via_cli(ytdlp_path, url):
     command = [ytdlp_path, '-f', 'bestaudio', '-j', '--no-playlist']
     if os.path.isfile(COOKIE_FILE):
         command.extend(['--cookies', COOKIE_FILE])
+    if os.path.isfile(DENO_PATH):
+        command.extend(['--js-runtimes', 'deno:{}'.format(DENO_PATH)])
     command.append(url)
     try:
         result = subprocess.run(
