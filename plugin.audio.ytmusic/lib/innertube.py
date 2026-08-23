@@ -431,6 +431,34 @@ class YTMusicClient:
         resp = self._call('next', body)
         return self._parse_watch_playlist(resp)
 
+    def rate_song(self, video_id, rating):
+        """Like a song or remove its like using the authenticated YTM account.
+
+        The web client exposes rating as three separate Innertube endpoints.
+        This add-on intentionally supports only LIKE and INDIFFERENT (remove
+        like); disliking a track would affect recommendations and needs a
+        separate, explicit feature.
+        """
+        endpoints = {
+            'LIKE': 'like/like',
+            'INDIFFERENT': 'like/removelike',
+        }
+        if not video_id:
+            raise RuntimeError('No video ID was provided.')
+        if rating not in endpoints:
+            raise RuntimeError('Unsupported song rating.')
+
+        response = self._call(endpoints[rating], {
+            'target': {'videoId': video_id},
+        })
+
+        # A gated write can return HTTP 200 while asking the web UI to show an
+        # engagement panel instead of carrying out the requested change.
+        panel = self._nav(response, ['actions', 0, 'showEngagementPanelEndpoint'])
+        if panel is not None:
+            raise RuntimeError('YouTube Music needs browser interaction before it can change this rating.')
+        return response
+
     # ── Parsing helpers ──
 
     def _nav(self, data, keys, default=None):

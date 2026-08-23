@@ -91,6 +91,11 @@ def get_watch_playlist(video_id):
     return get_client().get_watch_playlist(video_id)
 
 
+def rate_song(video_id, rating):
+    """Set a song's YouTube Music rating (LIKE or INDIFFERENT)."""
+    return get_client().rate_song(video_id, rating)
+
+
 def get_stream_url(video_id):
     from lib.resolver import get_stream_url as _resolve
     return _resolve(video_id)

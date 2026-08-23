@@ -399,6 +399,31 @@ class Router:
         except Exception as e:
             log(f'Could not queue radio: {e}')
 
+    def action_rate_song(self, params):
+        """Apply an explicit like or remove-like request to a song."""
+        video_id = params.get('video_id', '')
+        title = params.get('title', 'this song')
+        rating = params.get('rating', '')
+        labels = {
+            'LIKE': 'Like',
+            'INDIFFERENT': 'Remove like from',
+        }
+        action = labels.get(rating)
+        if not video_id or not action:
+            raise RuntimeError('Invalid song rating request.')
+
+        if not xbmcgui.Dialog().yesno(
+                'YTMusic', '{} "{}"?'.format(action, title)):
+            return
+
+        api.rate_song(video_id, rating)
+        if rating == 'LIKE':
+            message = 'Added to Liked Songs: {}'.format(title)
+        else:
+            message = 'Removed from Liked Songs: {}'.format(title)
+        xbmcgui.Dialog().notification('YTMusic', message,
+                                      xbmcgui.NOTIFICATION_INFO, 3000)
+
     # ── Helpers ──
 
     def _add_dir(self, label, icon=None, thumb=None, selectable=True, **url_params):
@@ -462,7 +487,21 @@ class Router:
             title=title,
             artist=artist,
         )
+        like_url = self.build_url(
+            action='rate_song',
+            video_id=video_id,
+            title=title,
+            rating='LIKE',
+        )
+        remove_like_url = self.build_url(
+            action='rate_song',
+            video_id=video_id,
+            title=title,
+            rating='INDIFFERENT',
+        )
         li.addContextMenuItems([
+            ('Like Song', f'RunPlugin({like_url})'),
+            ('Remove Like', f'RunPlugin({remove_like_url})'),
             ('Show Lyrics', f'RunPlugin({lyrics_url})'),
             ('Play Radio', f'RunPlugin({radio_url})'),
         ])
