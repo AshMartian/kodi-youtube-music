@@ -574,16 +574,22 @@ class Router:
         try:
             response = json.loads(xbmc.executeJSONRPC(request))
             item = response.get('result', {}).get('item', {})
-            file_url = item.get('file', '')
-            if not file_url.startswith('plugin://plugin.audio.ytmusic/'):
-                return None
-            query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(file_url).query))
+            # Player.GetItem resolves an add-on URL to its Google stream URL.
+            # The player info label retains the original plugin URL, which is
+            # the reliable source of the YTMusic video ID while playing.
+            file_url = xbmc.getInfoLabel('Player.FilenameAndPath')
+            query = {}
+            if file_url.startswith('plugin://plugin.audio.ytmusic/'):
+                query = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(file_url).query))
             video_id = query.get('video_id', '')
+            if not video_id:
+                video_id = xbmcgui.Window(10000).getProperty('YTMusic.CurrentVideoId')
             if not video_id:
                 return None
             return {
                 'video_id': video_id,
-                'title': item.get('title') or query.get('title', 'this song'),
+                'title': (xbmc.getInfoLabel('MusicPlayer.Title') or
+                          item.get('title') or query.get('title', 'this song')),
             }
         except (RuntimeError, ValueError, TypeError):
             return None
