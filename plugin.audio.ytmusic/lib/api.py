@@ -92,7 +92,7 @@ def get_watch_playlist(video_id):
 
 
 def rate_song(video_id, rating):
-    """Set a song's YouTube Music rating (LIKE or INDIFFERENT)."""
+    """Set a song's YouTube Music rating (LIKE, DISLIKE, or INDIFFERENT)."""
     return get_client().rate_song(video_id, rating)
 
 

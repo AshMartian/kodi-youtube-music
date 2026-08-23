@@ -432,15 +432,10 @@ class YTMusicClient:
         return self._parse_watch_playlist(resp)
 
     def rate_song(self, video_id, rating):
-        """Like a song or remove its like using the authenticated YTM account.
-
-        The web client exposes rating as three separate Innertube endpoints.
-        This add-on intentionally supports only LIKE and INDIFFERENT (remove
-        like); disliking a track would affect recommendations and needs a
-        separate, explicit feature.
-        """
+        """Set a song's authenticated YouTube Music rating."""
         endpoints = {
             'LIKE': 'like/like',
+            'DISLIKE': 'like/dislike',
             'INDIFFERENT': 'like/removelike',
         }
         if not video_id:
@@ -595,6 +590,9 @@ class YTMusicClient:
         }
         if video_id:
             item['videoId'] = video_id
+            like_status = self._get_like_status(renderer)
+            if like_status:
+                item['likeStatus'] = like_status
         if browse_id:
             item['browseId'] = browse_id
         if playlist_id:
@@ -741,7 +739,7 @@ class YTMusicClient:
         if not video_id:
             return None
 
-        return {
+        item = {
             'videoId': video_id,
             'title': title,
             'artists': [{'name': artist}] if artist else [],
@@ -749,6 +747,19 @@ class YTMusicClient:
             'duration': duration,
             'thumbnails': thumbs,
         }
+        like_status = self._get_like_status(renderer)
+        if like_status:
+            item['likeStatus'] = like_status
+        return item
+
+    def _get_like_status(self, renderer):
+        """Read YouTube Music's current three-state rating from an item menu."""
+        buttons = self._nav(renderer, ['menu', 'menuRenderer', 'topLevelButtons'], [])
+        for button in buttons or []:
+            status = self._nav(button, ['likeButtonRenderer', 'likeStatus'])
+            if status in ('LIKE', 'DISLIKE', 'INDIFFERENT'):
+                return status
+        return ''
 
     def _parse_album_items(self, resp):
         """Parse library albums."""

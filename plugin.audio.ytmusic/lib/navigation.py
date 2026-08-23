@@ -400,29 +400,24 @@ class Router:
             log(f'Could not queue radio: {e}')
 
     def action_rate_song(self, params):
-        """Apply an explicit like or remove-like request to a song."""
+        """Apply a one-click YouTube Music rating change to a song."""
         video_id = params.get('video_id', '')
         title = params.get('title', 'this song')
         rating = params.get('rating', '')
-        labels = {
-            'LIKE': 'Like',
-            'INDIFFERENT': 'Remove like from',
+        messages = {
+            'LIKE': 'Added to Liked Songs: {}'.format(title),
+            'DISLIKE': 'Disliked: {}'.format(title),
+            'INDIFFERENT': 'Rating removed: {}'.format(title),
         }
-        action = labels.get(rating)
-        if not video_id or not action:
+        message = messages.get(rating)
+        if not video_id or not message:
             raise RuntimeError('Invalid song rating request.')
 
-        if not xbmcgui.Dialog().yesno(
-                'YTMusic', '{} "{}"?'.format(action, title)):
-            return
-
         api.rate_song(video_id, rating)
-        if rating == 'LIKE':
-            message = 'Added to Liked Songs: {}'.format(title)
-        else:
-            message = 'Removed from Liked Songs: {}'.format(title)
         xbmcgui.Dialog().notification('YTMusic', message,
                                       xbmcgui.NOTIFICATION_INFO, 3000)
+        # Refetch the item so its context menu reflects the server's rating.
+        xbmc.executebuiltin('Container.Refresh')
 
     # ── Helpers ──
 
@@ -487,21 +482,19 @@ class Router:
             title=title,
             artist=artist,
         )
-        like_url = self.build_url(
-            action='rate_song',
-            video_id=video_id,
-            title=title,
-            rating='LIKE',
-        )
-        remove_like_url = self.build_url(
-            action='rate_song',
-            video_id=video_id,
-            title=title,
-            rating='INDIFFERENT',
-        )
+        like_status = song.get('likeStatus', 'INDIFFERENT')
+        rating_actions = {
+            'LIKE': [('Unlike Song', 'INDIFFERENT'), ('Dislike Song', 'DISLIKE')],
+            'DISLIKE': [('Like Song', 'LIKE'), ('Undo Dislike', 'INDIFFERENT')],
+            'INDIFFERENT': [('Like Song', 'LIKE'), ('Dislike Song', 'DISLIKE')],
+        }.get(like_status, [('Like Song', 'LIKE'), ('Dislike Song', 'DISLIKE')])
+        rating_menu_items = []
+        for label, rating in rating_actions:
+            rating_url = self.build_url(
+                action='rate_song', video_id=video_id, title=title, rating=rating)
+            rating_menu_items.append((label, 'RunPlugin({})'.format(rating_url)))
         li.addContextMenuItems([
-            ('Like Song', f'RunPlugin({like_url})'),
-            ('Remove Like', f'RunPlugin({remove_like_url})'),
+        ] + rating_menu_items + [
             ('Show Lyrics', f'RunPlugin({lyrics_url})'),
             ('Play Radio', f'RunPlugin({radio_url})'),
         ])
