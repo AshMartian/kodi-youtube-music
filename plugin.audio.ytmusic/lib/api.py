@@ -1,12 +1,20 @@
 """YouTube Music API - thin wrapper around innertube client."""
 
+import json
+import os
 import re
+import time
 
 import xbmc
 import xbmcaddon
+import xbmcvfs
 from lib.innertube import YTMusicClient
 
 ADDON = xbmcaddon.Addon()
+PROFILE = xbmcvfs.translatePath(ADDON.getAddonInfo('profile'))
+HOME_CACHE_FILE = os.path.join(PROFILE, 'home_cache.json')
+HOME_CACHE_LOCK = os.path.join(PROFILE, 'home_cache.lock')
+HOME_CACHE_TTL = 90
 
 # Resolution setting -> pixel size for square Google cover art.
 _THUMB_SIZES = {'0': 544, '1': 800, '2': 1200, '3': 1600}
@@ -44,7 +52,61 @@ def reset_client():
 
 
 def get_home():
-    return get_client().get_home()
+    """Return the personalised Home feed, sharing it between dashboard widgets.
+
+    Bingie loads its YTMusic widgets concurrently.  Without a small
+    cross-process cache every widget makes the same authenticated browse call,
+    which can make one of them exceed Kodi's directory timeout.
+    """
+    def read_cache():
+        with open(HOME_CACHE_FILE, 'r') as f:
+            cache = json.load(f)
+        sections = cache.get('sections')
+        age = time.time() - cache.get('timestamp', 0)
+        return sections, age
+
+    try:
+        sections, age = read_cache()
+        if isinstance(sections, list) and age < HOME_CACHE_TTL:
+            log('Using cached home feed ({:.0f}s old)'.format(age))
+            return sections
+    except (IOError, ValueError, TypeError):
+        sections = None
+
+    # One widget fetches a missing or stale feed.  The others either use the
+    # previous feed immediately or wait briefly for that one request to finish.
+    try:
+        os.makedirs(PROFILE, exist_ok=True)
+        lock_fd = os.open(HOME_CACHE_LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except OSError:
+        if isinstance(sections, list):
+            log('Using stale home feed while another widget refreshes it')
+            return sections
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            time.sleep(0.2)
+            try:
+                sections, age = read_cache()
+                if isinstance(sections, list) and age < HOME_CACHE_TTL:
+                    log('Using home feed fetched by another widget')
+                    return sections
+            except (IOError, ValueError, TypeError):
+                pass
+        # A failed fetch must not leave the dashboard unusable.
+        return get_client().get_home()
+
+    try:
+        sections = get_client().get_home()
+        if isinstance(sections, list):
+            with open(HOME_CACHE_FILE, 'w') as f:
+                json.dump({'timestamp': time.time(), 'sections': sections}, f)
+        return sections
+    finally:
+        try:
+            os.close(lock_fd)
+            os.remove(HOME_CACHE_LOCK)
+        except OSError:
+            pass
 
 
 def get_library_playlists(limit=25):
