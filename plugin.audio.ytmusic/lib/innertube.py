@@ -1054,18 +1054,30 @@ class YTMusicClient:
     def _parse_watch_playlist(self, resp):
         """Parse watch/next response for radio queue."""
         tracks = []
-        playlist = self._nav(resp, ['contents', 'singleColumnMusicWatchNextResultsRenderer',
-                                     'tabbedRenderer', 'watchNextTabbedResultsRenderer',
-                                     'tabs', 0, 'tabRenderer', 'content',
-                                     'musicQueueRenderer', 'content',
-                                     'playlistPanelRenderer', 'contents'], [])
+        # The web client has used several nesting layouts for its up-next
+        # panel.  Looking for the renderer itself is both backwards-compatible
+        # with the original path and tolerant of those harmless layout changes.
+        renderers = []
 
-        for item in playlist:
-            renderer = item.get('playlistPanelVideoRenderer')
-            if not renderer:
-                continue
+        def collect(value):
+            if isinstance(value, dict):
+                renderer = value.get('playlistPanelVideoRenderer')
+                if isinstance(renderer, dict):
+                    renderers.append(renderer)
+                for child in value.values():
+                    collect(child)
+            elif isinstance(value, list):
+                for child in value:
+                    collect(child)
+
+        collect(resp)
+        seen_video_ids = set()
+        for renderer in renderers:
 
             video_id = renderer.get('videoId', '')
+            if not video_id or video_id in seen_video_ids:
+                continue
+            seen_video_ids.add(video_id)
             title = self._get_text(renderer.get('title'))
 
             artists_text = ''
@@ -1080,13 +1092,12 @@ class YTMusicClient:
             duration = self._get_text(self._nav(renderer, ['lengthText']))
             thumbs = self._get_thumbnails(renderer.get('thumbnail'))
 
-            if video_id:
-                tracks.append({
-                    'videoId': video_id,
-                    'title': title,
-                    'artists': [{'name': artists_text}] if artists_text else [],
-                    'duration': duration,
-                    'thumbnails': thumbs,
-                })
+            tracks.append({
+                'videoId': video_id,
+                'title': title,
+                'artists': [{'name': artists_text}] if artists_text else [],
+                'duration': duration,
+                'thumbnails': thumbs,
+            })
 
         return {'tracks': tracks}

@@ -389,9 +389,14 @@ class Router:
             watch = api.get_watch_playlist(video_id)
             tracks = watch.get('tracks', [])
             playlist = xbmc.PlayList(xbmc.PLAYLIST_MUSIC)
-            for track in tracks[1:]:  # Skip first (currently playing)
+            queued = 0
+            for track in tracks:
                 tid = track.get('videoId', '')
-                if not tid:
+                # The selected song is normally first, but this is not
+                # guaranteed by every watch response.  Skip it by identity,
+                # rather than by position, so the first recommendation is not
+                # accidentally discarded.
+                if not tid or tid == video_id:
                     continue
                 tname = track.get('title', '')
                 tartist = self._artist_name(track)
@@ -404,6 +409,8 @@ class Router:
                 if tthumb:
                     li.setArt({'thumb': tthumb})
                 playlist.add(url, li)
+                queued += 1
+            log('Queued {} radio tracks for {}'.format(queued, video_id))
         except Exception as e:
             log(f'Could not queue radio: {e}')
 
